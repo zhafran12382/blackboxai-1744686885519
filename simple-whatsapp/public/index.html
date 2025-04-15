@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple WhatsApp - 4 Users</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+  <header class="bg-green-600 text-white p-4 text-center text-xl font-semibold flex items-center justify-between">
+    <div>Simple WhatsApp - 4 Users</div>
+    <div class="flex space-x-4">
+      <button class="hover:bg-green-700 p-2 rounded"><i class="fas fa-search"></i></button>
+      <button class="hover:bg-green-700 p-2 rounded"><i class="fas fa-ellipsis-v"></i></button>
+    </div>
+  </header>
+
+  <main class="flex flex-1 overflow-hidden">
+    <!-- Sidebar: Chat List -->
+    <aside class="w-80 bg-white border-r border-gray-300 flex flex-col">
+      <div class="p-4 border-b border-gray-300 flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Chats</h2>
+        <button class="text-green-600 hover:bg-green-100 p-2 rounded"><i class="fas fa-plus"></i></button>
+      </div>
+      <div id="chatList" class="flex-1 overflow-auto">
+        <!-- Example chat item -->
+        <div class="flex items-center p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200">
+          <img src="https://i.pravatar.cc/40" alt="User Avatar" class="rounded-full w-10 h-10 mr-3" />
+          <div class="flex-1">
+            <div class="flex justify-between items-center">
+              <span class="font-semibold text-gray-900">User_1234</span>
+              <span class="text-xs text-gray-500">12:30 PM</span>
+            </div>
+            <p class="text-sm text-gray-600 truncate">Last message preview goes here...</p>
+          </div>
+        </div>
+        <!-- More chat items can be dynamically added here -->
+      </div>
+    </aside>
+
+    <!-- Main Chat Window -->
+    <section class="flex-1 flex flex-col">
+      <div id="chatHeader" class="bg-white border-b border-gray-300 p-4 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <img src="https://i.pravatar.cc/40" alt="Chat Avatar" class="rounded-full w-10 h-10" />
+          <div>
+            <div class="font-semibold text-gray-900" id="chatUserName">User_1234</div>
+            <div class="text-xs text-green-600">online</div>
+          </div>
+        </div>
+        <div class="flex space-x-4 text-gray-600">
+          <button class="hover:text-green-600"><i class="fas fa-video"></i></button>
+          <button class="hover:text-green-600"><i class="fas fa-phone"></i></button>
+          <button class="hover:text-green-600"><i class="fas fa-ellipsis-v"></i></button>
+        </div>
+      </div>
+
+      <div id="messages" class="flex-1 overflow-auto p-4 space-y-2 bg-gray-50 flex flex-col"></div>
+
+      <form id="chatForm" class="bg-white p-4 border-t border-gray-300 flex items-center space-x-2">
+        <button type="button" class="text-gray-500 hover:text-green-600"><i class="far fa-smile"></i></button>
+        <input id="messageInput" autocomplete="off" placeholder="Type a message" class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" />
+        <button type="button" id="imageButton" class="text-gray-500 hover:text-green-600"><i class="fas fa-paperclip"></i></button>
+        <button type="button" id="recordButton" class="text-gray-500 hover:text-green-600"><i class="fas fa-microphone"></i></button>
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-full hover:bg-green-700 transition">Send</button>
+        <input id="imageInput" type="file" accept="image/*" style="display:none" />
+      </form>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    // Generate a random user name for each visitor
+    const randomId = Math.floor(Math.random() * 10000);
+    let currentUserName = 'User_' + randomId;
+
+    const chatHeaderEl = document.getElementById('chatHeader');
+    const messagesEl = document.getElementById('messages');
+    const chatFormEl = document.getElementById('chatForm');
+    const messageInputEl = document.getElementById('messageInput');
+    const imageInputEl = document.getElementById('imageInput');
+    const imageButton = document.getElementById('imageButton');
+    const recordButton = document.getElementById('recordButton');
+
+    // Add a button to change user name
+    const changeNameButton = document.createElement('button');
+    changeNameButton.textContent = 'Change Name';
+    changeNameButton.className = 'ml-4 bg-yellow-400 text-black px-3 py-1 rounded hover:bg-yellow-500';
+    chatHeaderEl.appendChild(changeNameButton);
+
+    changeNameButton.addEventListener('click', () => {
+      const newName = prompt('Enter your new display name:', currentUserName);
+      if (newName && newName.trim() !== '') {
+        currentUserName = newName.trim();
+        chatHeaderEl.querySelector('#chatUserName')?.textContent = currentUserName;
+      }
+    });
+
+    chatHeaderEl.querySelector('#chatUserName')?.textContent = currentUserName;
+
+    // Add image upload button functionality
+    imageButton.addEventListener('click', () => {
+      imageInputEl.click();
+    });
+
+    imageInputEl.addEventListener('change', () => {
+      const file = imageInputEl.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const msgObj = {
+          userName: currentUserName,
+          message: reader.result,
+          type: 'image',
+          timestamp: new Date().toISOString()
+        };
+        socket.emit('chat message', msgObj);
+      };
+      reader.readAsDataURL(file);
+      imageInputEl.value = '';
+    });
+
+    // Voice recording setup
+    let mediaRecorder;
+    let audioChunks = [];
+    let recording = false;
+
+    recordButton.addEventListener('click', () => {
+      if (recording) {
+        mediaRecorder.stop();
+        recordButton.innerHTML = '<i class="fas fa-microphone"></i>';
+        recording = false;
+      } else {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('Audio recording not supported in this browser.');
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.start();
+          recordButton.innerHTML = '<i class="fas fa-stop"></i>';
+          recording = true;
+          audioChunks = [];
+          mediaRecorder.addEventListener('dataavailable', event => {
+            audioChunks.push(event.data);
+          });
+          mediaRecorder.addEventListener('stop', () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = () => {
+              const msgObj = {
+                userName: currentUserName,
+                message: reader.result,
+                type: 'audio',
+                timestamp: new Date().toISOString()
+              };
+              socket.emit('chat message', msgObj);
+            };
+            reader.readAsDataURL(audioBlob);
+          });
+        }).catch(() => {
+          alert('Permission denied for audio recording.');
+        });
+      }
+    });
+
+    chatFormEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const message = messageInputEl.value.trim();
+      if (message === '') return;
+      const msgObj = {
+        userName: currentUserName,
+        message: message,
+        type: 'text',
+        timestamp: new Date().toISOString()
+      };
+      socket.emit('chat message', msgObj);
+      messageInputEl.value = '';
+    });
+
+    socket.on('chat message', (msg) => {
+      const msgEl = document.createElement('div');
+      msgEl.className = 'p-2 rounded shadow max-w-xs bg-white self-start mr-auto';
+      const time = new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+      if (msg.type === 'image') {
+        msgEl.innerHTML = '<span class="font-semibold text-gray-700">' + msg.userName + '</span><br/><img src="' + msg.message + '" alt="Image" class="rounded max-w-full h-auto mt-1 mb-1 shadow" /><div class="text-xs text-gray-500">' + time + '</div>';
+      } else if (msg.type === 'audio') {
+        msgEl.innerHTML = '<span class="font-semibold text-gray-700">' + msg.userName + '</span><br/><audio controls src="' + msg.message + '" class="mt-1 mb-1 w-full"></audio><div class="text-xs text-gray-500">' + time + '</div>';
+      } else {
+        msgEl.innerHTML = '<span class="font-semibold text-gray-700">' + msg.userName + '</span>: ' + msg.message + ' <span class="text-xs text-gray-500 ml-2">' + time + '</span>';
+      }
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  </script>
+</body>
+</html>
